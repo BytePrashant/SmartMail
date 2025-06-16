@@ -1,28 +1,52 @@
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import logging
+import uvicorn
 
-app = FastAPI()
+from app.core.config import settings
+from app.api.routes import router as api_router
 
-@app.post("/upload-data")
-async def upload_data(file: UploadFile = File(...)):
-    # TODO: Parse the uploaded file and return the data
-    return {"message": f"Received file: {file.filename}"}
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-@app.post("/generate-preview")
-async def generate_preview(
-    subject: str = Form(...),
-    body: str = Form(...),
-    data: str = Form(...)
-):
-    # TODO: Merge template with data and return preview
-    return {"message": "Preview generated", "subject": subject, "body": body, "data": data}
+# Create FastAPI app
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+)
 
-@app.post("/send-emails")
-async def send_emails(
-    subject: str = Form(...),
-    body: str = Form(...),
-    data: str = Form(...)
-):
-    # TODO: Send emails and return status
-    return {"message": "Emails sent", "subject": subject, "body": body, "data": data}
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include API router
+app.include_router(api_router)
+
+@app.get("/")
+async def root():
+    """Root endpoint - redirects to API docs."""
+    return {
+        "message": f"Welcome to {settings.PROJECT_NAME}",
+        "docs_url": "/docs",
+        "api_url": settings.API_V1_STR
+    }
+
+if __name__ == "__main__":
+    logger.info(f"Starting {settings.PROJECT_NAME} API server...")
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )
     
