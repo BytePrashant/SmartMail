@@ -7,51 +7,66 @@ import TemplateForm from './components/TemplateForm';
 import PreviewTable from './components/PreviewTable';
 import SendButton from './components/SendButton';
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [step, setStep] = useState(1);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
+  const [data, setData] = useState([]);
 
-  // Mock data for preview
-  const [data, setData] = useState([
-    { name: 'Alice', company: 'Acme', email: 'alice@acme.com' },
-    { name: 'Bob', company: 'BetaCorp', email: 'bob@betacorp.com' },
-  ]);
 
-  const handleFileSelect = (file) => {
-    console.log('Selected file:', file);
-    // In the future, parse the file and setData with real data
+  const handleFileSelect = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(`${API_URL}/upload-data`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'File upload failed');
+      }
+
+      const result = await response.json();
+      setData(result.data); // Update your data state with the contacts from backend
+      alert(result.message); // Optional: show a success message
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const handlePreview = (e) => {
     e.preventDefault();
-    setShowPreview(true);
-    // For now, just log the subject and body
-    console.log('Subject:', subject);
-    console.log('Body:', body);
+    setStep(2);
   };
 
   return (
     <div className="app-container">
       <h2>SmartMail</h2>
-      <FileUpload onFileSelect={handleFileSelect} />
-      <TemplateForm
-        subject={subject}
-        body={body}
-        onSubjectChange={setSubject}
-        onBodyChange={setBody}
-        onSubmit={handlePreview}
-      />
-      {showPreview && (
+      {step === 1 && (
         <>
-          <PreviewTable data={data} subject={subject} body={body} />
+          <FileUpload onFileSelect={handleFileSelect} />
+          <TemplateForm
+            subject={subject}
+            body={body}
+            onSubjectChange={setSubject}
+            onBodyChange={setBody}
+            onSubmit={handlePreview}
+          />
+        </>
+      )}
+      {step === 2 && (
+        <>
+          <PreviewTable data={data.slice(0, 3)} subject={subject} body={body} />
           <SendButton
             onClick={() => {
-              // For now, just log to console
-              console.log('Sending emails...');
+              // send emails logic
             }}
-            disabled={!showPreview || !data.length}
+            disabled={!data.length}
           />
         </>
       )}
