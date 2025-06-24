@@ -7,6 +7,7 @@ class ContactData(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
     company_name: Optional[str] = None
+    first_name: Optional[str] = None
     # Add any other fields that might be in your CSV/XLSX
 
 class EmailTemplate(BaseModel):

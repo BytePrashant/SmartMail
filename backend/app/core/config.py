@@ -1,10 +1,5 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 class Settings(BaseSettings):
     # API Settings
@@ -18,10 +13,10 @@ class Settings(BaseSettings):
     ]
     
     # Email Settings
-    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
-    SENDER_EMAIL: str = os.getenv("SENDER_EMAIL", "")
-    SENDER_PASSWORD: str = os.getenv("SENDER_PASSWORD", "")
+    SMTP_SERVER: str
+    SMTP_PORT: int
+    SENDER_EMAIL: str
+    SENDER_PASSWORD: str
     
     # Rate Limiting
     MAX_EMAILS_PER_RUN: int = 499
@@ -35,6 +30,7 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
     
     class Config:
+        env_file = ".env"
         case_sensitive = True
 
 @lru_cache()

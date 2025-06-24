@@ -47,7 +47,6 @@ class TemplateService:
                     email=data.get('Email', ''),
                     full_name=data.get('Full Name'),
                     company_name=data.get('Company Name')
-                    # Add other fields as needed
                 )
                 contacts.append(contact)
             
@@ -82,8 +81,8 @@ class TemplateService:
                 data = contact.model_dump()
                 
                 # Generate subject and body
-                subject = subject_template.format(**data)
-                body = body_template.format(**data)
+                subject = f"{subject_template}, {data['full_name']}"
+                body = f"Hi, {data['full_name']}\n{body_template}"
                 
                 # Create preview
                 preview = EmailPreview(
@@ -130,8 +129,8 @@ class TemplateService:
                 data = contact.model_dump()
                 
                 # Generate subject and body
-                subject = subject_template.format(**data)
-                body = body_template.format(**data)
+                subject = f"{subject_template}, {data['full_name']}"
+                body = f"Hi, {data['full_name']}\n{body_template}"
                 
                 # Add to list
                 emails.append({
