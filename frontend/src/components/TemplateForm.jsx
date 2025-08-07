@@ -20,6 +20,7 @@ function TemplateForm({ subject, body, onSubjectChange, onBodyChange, onSubmit }
           value={body}
           onChange={e => onBodyChange(e.target.value)}
           required
+          style={{ minHeight: '120px' }}
         />
       </div>
       <button type="submit">Preview</button>

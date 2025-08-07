@@ -10,6 +10,34 @@ function PreviewTable({ data, subject, body }) {
     return <p>No data to preview.</p>;
   }
 
+  const handleSendEmails = async () => {
+    try {
+      const response = await fetch(`${API_URL}/send-emails`, {
+        method: 'POST',
+        headers: {
+          // 'Content-Type': 'application/json', // Don't set this for FormData
+        },
+        body: (() => {
+          const formData = new FormData();
+          formData.append('subject', subject);
+          formData.append('body', body);
+          formData.append('data', JSON.stringify(data));
+          return formData;
+        })(),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to send emails');
+      }
+
+      const result = await response.json();
+      alert(result.message || 'Emails sent successfully!');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
   return (
     <div>
       <h3>Email Preview</h3>

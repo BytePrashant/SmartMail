@@ -14,7 +14,7 @@ function App() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [data, setData] = useState([]);
-
+  const [pdfFile, setPdfFile] = useState(null);
 
   const handleFileSelect = async (file) => {
     const formData = new FormData();
@@ -44,6 +44,34 @@ function App() {
     setStep(2);
   };
 
+  const handleSendEmails = async () => {
+    try {
+      const response = await fetch(`${API_URL}/send-emails`, {
+        method: 'POST',
+        body: (() => {
+          const formData = new FormData();
+          formData.append('subject', subject);
+          formData.append('body', body);
+          formData.append('data', JSON.stringify(data));
+          if (pdfFile) {
+            formData.append('attachment', pdfFile);
+          }
+          return formData;
+        })(),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to send emails');
+      }
+
+      const result = await response.json();
+      alert(result.message || 'Emails sent successfully!');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
   return (
     <div className="app-container">
       <h2>SmartMail</h2>
@@ -57,15 +85,23 @@ function App() {
             onBodyChange={setBody}
             onSubmit={handlePreview}
           />
+          <div style={{ margin: '16px 0' }}>
+            <label htmlFor="pdf-upload">Attach PDF to all emails: </label>
+            <input
+              id="pdf-upload"
+              type="file"
+              accept="application/pdf"
+              onChange={e => setPdfFile(e.target.files[0])}
+            />
+            {pdfFile && <span style={{ marginLeft: 8 }}>{pdfFile.name}</span>}
+          </div>
         </>
       )}
       {step === 2 && (
         <>
           <PreviewTable data={data.slice(0, 3)} subject={subject} body={body} />
           <SendButton
-            onClick={() => {
-              // send emails logic
-            }}
+            onClick={handleSendEmails}
             disabled={!data.length}
           />
         </>
