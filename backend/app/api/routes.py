@@ -114,16 +114,12 @@ async def send_emails(
     subject: str = Form(...),
     body: str = Form(...),
     data: str = Form(...),
-    max_per_run: int = Form(None)
+    max_per_run: int = Form(None),
+    attachment: UploadFile = File(None)
 ):
     """
     Send emails in bulk with rate limiting and proper error handling.
-    
-    Args:
-        subject: Subject template with placeholders
-        body: Body template with placeholders
-        data: JSON string of contact data from /upload-data
-        max_per_run: Optional maximum number of emails to send in this batch
+    Optionally attach a PDF file to each email.
     """
     try:
         # Validate email settings
@@ -132,30 +128,28 @@ async def send_emails(
                 status_code=500,
                 detail="Email configuration not set. Please set SENDER_EMAIL and SENDER_PASSWORD in .env file."
             )
-        
         # Parse the data string back to list of dictionaries
         contact_data = json.loads(data)
-        
         if not contact_data:
             raise HTTPException(status_code=400, detail="No contact data provided")
-        
         # Convert to ContactData objects
         contacts = [ContactData(**item) for item in contact_data]
-        
         # Generate emails
         emails = template_service.generate_emails(contacts, subject, body)
-        
         if not emails:
             raise HTTPException(
                 status_code=400,
                 detail="No emails generated. Check your template placeholders."
             )
-        
-        # Send emails
-        result = email_service.send_batch_emails(emails, max_per_run)
-        
+        # Read attachment if provided
+        attachment_bytes = None
+        attachment_filename = None
+        if attachment is not None:
+            attachment_bytes = await attachment.read()
+            attachment_filename = attachment.filename
+        # Send emails (pass attachment info)
+        result = email_service.send_batch_emails(emails, max_per_run, attachment_bytes=attachment_bytes, attachment_filename=attachment_filename)
         return result
-    
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid data format")
     except Exception as e:
