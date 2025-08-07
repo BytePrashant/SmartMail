@@ -1,8 +1,8 @@
 import React from 'react';
 
-function TemplateForm({ subject, body, onSubjectChange, onBodyChange, onSubmit }) {
+function TemplateForm({ subject, body, onSubjectChange, onBodyChange }) {
   return (
-    <form onSubmit={onSubmit}>
+    <form>
       <div>
         <label htmlFor="subject">Subject:</label>
         <input
@@ -23,7 +23,6 @@ function TemplateForm({ subject, body, onSubjectChange, onBodyChange, onSubmit }
           style={{ minHeight: '120px' }}
         />
       </div>
-      <button type="submit">Preview</button>
     </form>
   );
 }

@@ -20,7 +20,7 @@ const modalStyle = {
   boxShadow: '0 4px 32px rgba(0,0,0,0.18)',
   maxWidth: 650,
   width: '95%',
-  minHeight: '480px', // Increased height by about 20%
+  minHeight: '480px', 
   position: 'relative',
   textAlign: 'center',
   display: 'flex',
