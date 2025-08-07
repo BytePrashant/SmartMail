@@ -6,6 +6,7 @@ import FileUpload from './components/FileUpload';
 import TemplateForm from './components/TemplateForm';
 import PreviewTable from './components/PreviewTable';
 import SendButton from './components/SendButton';
+import InstructionModal from './components/InstructionModal';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -15,6 +16,7 @@ function App() {
   const [body, setBody] = useState('');
   const [data, setData] = useState([]);
   const [pdfFile, setPdfFile] = useState(null);
+  const [showModal, setShowModal] = useState(true);
 
   const handleFileSelect = async (file) => {
     const formData = new FormData();
@@ -74,6 +76,27 @@ function App() {
 
   return (
     <div className="app-container">
+      <InstructionModal isOpen={showModal} onClose={() => setShowModal(false)} />
+      {!showModal && (
+        <button
+          style={{
+            position: 'fixed',
+            top: 20,
+            right: 20,
+            zIndex: 1001,
+            padding: '8px 16px',
+            background: '#1976d2',
+            color: 'white',
+            border: 'none',
+            borderRadius: 4,
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+          }}
+          onClick={() => setShowModal(true)}
+        >
+          Show Instructions
+        </button>
+      )}
       <h2>SmartMail</h2>
       {step === 1 && (
         <>
