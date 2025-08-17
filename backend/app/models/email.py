@@ -40,4 +40,24 @@ class FileUploadResponse(BaseModel):
     """Model for file upload response"""
     message: str
     data: List[ContactData]
-    count: int 
+    count: int
+
+class EmailConfig(BaseModel):
+    """Model for email configuration"""
+    smtp_server: str = Field(..., description="SMTP server (e.g., smtp.gmail.com)")
+    smtp_port: int = Field(..., ge=1, le=65535, description="SMTP port (e.g., 587 for TLS)")
+    sender_email: EmailStr = Field(..., description="Sender email address")
+    sender_password: str = Field(..., min_length=1, description="App password or email password")
+    use_tls: bool = Field(default=True, description="Use TLS encryption")
+
+class EmailConfigResponse(BaseModel):
+    """Model for email configuration response"""
+    message: str
+    success: bool
+    config: Optional[EmailConfig] = None
+
+class EmailTestResponse(BaseModel):
+    """Model for email configuration test response"""
+    message: str
+    success: bool
+    error: Optional[str] = None 

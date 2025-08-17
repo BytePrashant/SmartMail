@@ -7,22 +7,32 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
 from ..core.config import settings
-from ..models.email import EmailStatus, EmailBatchResponse
+from ..models.email import EmailStatus, EmailBatchResponse, EmailConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class EmailService:
-    def __init__(self):
-        self.smtp_server = settings.SMTP_SERVER
-        self.smtp_port = settings.SMTP_PORT
-        self.sender_email = settings.SENDER_EMAIL
-        self.sender_password = settings.SENDER_PASSWORD
+    def __init__(self, config: Optional[EmailConfig] = None):
+        # Use provided config or fall back to settings
+        if config:
+            self.smtp_server = config.smtp_server
+            self.smtp_port = config.smtp_port
+            self.sender_email = config.sender_email
+            self.sender_password = config.sender_password
+            self.use_tls = config.use_tls
+        else:
+            # Fallback to environment variables (for backward compatibility)
+            self.smtp_server = settings.SMTP_SERVER
+            self.smtp_port = settings.SMTP_PORT
+            self.sender_email = settings.SENDER_EMAIL
+            self.sender_password = settings.SENDER_PASSWORD
+            self.use_tls = True
         
         # Validate email settings
         if not self.sender_email or not self.sender_password:
-            logger.warning("Email credentials not configured. Set SENDER_EMAIL and SENDER_PASSWORD in .env file.")
+            logger.warning("Email credentials not configured. Set SENDER_EMAIL and SENDER_PASSWORD in .env file or use EmailConfig.")
     
     def _create_email_message(self, to_email: str, subject: str, body: str, attachment_bytes: bytes = None, attachment_filename: str = None) -> MIMEMultipart:
         """Create an email message with the given parameters and optional PDF attachment."""
@@ -45,14 +55,27 @@ class EmailService:
         try:
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
             server.ehlo()
-            server.starttls()
-            server.ehlo()
+            
+            if self.use_tls:
+                server.starttls()
+                server.ehlo()
+            
             server.login(self.sender_email, self.sender_password)
             return server
         except Exception as e:
             logger.error(f"Failed to connect to SMTP server: {str(e)}")
             raise
     
+    def test_connection(self) -> bool:
+        """Test SMTP connection without sending an email."""
+        try:
+            with self._connect_smtp() as server:
+                logger.info("SMTP connection test successful")
+                return True
+        except Exception as e:
+            logger.error(f"SMTP connection test failed: {str(e)}")
+            return False
+
     def send_single_email(self, to_email: str, subject: str, body: str, attachment_bytes: bytes = None, attachment_filename: str = None) -> EmailStatus:
         """Send a single email and return its status, with optional PDF attachment."""
         status = EmailStatus(

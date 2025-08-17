@@ -4,14 +4,16 @@ from typing import List
 import json
 import logging
 
-from ..services.email_service import email_service
+from ..services.email_service import EmailService
 from ..services.template_service import template_service
 from ..models.email import (
     ContactData,
-    EmailTemplate,
     EmailPreview,
     EmailBatchResponse,
-    FileUploadResponse
+    FileUploadResponse,
+    EmailConfig,
+    EmailConfigResponse,
+    EmailTestResponse
 )
 from ..core.config import settings
 
@@ -21,6 +23,100 @@ logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter(prefix=settings.API_V1_STR)
+
+# Global variable to store email config (in production, use a database or secure storage)
+email_config_store = None
+
+@router.post("/email-config", response_model=EmailConfigResponse)
+async def set_email_config(config: EmailConfig):
+    """
+    Set email configuration for SMTP settings.
+    """
+    global email_config_store
+    try:
+        # Test the configuration before saving
+        test_result = await test_email_config(config)
+        if not test_result.success:
+            return EmailConfigResponse(
+                message=f"Configuration test failed: {test_result.error}",
+                success=False
+            )
+        
+        # Store the configuration
+        email_config_store = config
+        return EmailConfigResponse(
+            message="Email configuration saved successfully",
+            success=True,
+            config=config
+        )
+    except Exception as e:
+        logger.error(f"Error setting email config: {str(e)}")
+        return EmailConfigResponse(
+            message=f"Failed to save configuration: {str(e)}",
+            success=False
+        )
+
+@router.get("/email-config", response_model=EmailConfigResponse)
+async def get_email_config():
+    """
+    Get current email configuration.
+    """
+    global email_config_store
+    if email_config_store is None:
+        return EmailConfigResponse(
+            message="No email configuration found",
+            success=False
+        )
+    
+    return EmailConfigResponse(
+        message="Email configuration retrieved successfully",
+        success=True,
+        config=email_config_store
+    )
+
+@router.post("/email-config/test", response_model=EmailTestResponse)
+async def test_email_config_endpoint(config: EmailConfig):
+    """
+    Test email configuration without saving it.
+    """
+    return await test_email_config(config)
+
+async def test_email_config(config: EmailConfig) -> EmailTestResponse:
+    """
+    Test email configuration by attempting to connect to SMTP server.
+    """
+    try:
+        # Validate required fields
+        if not config.smtp_server or not config.sender_email or not config.sender_password:
+            return EmailTestResponse(
+                message="Invalid configuration",
+                success=False,
+                error="Missing required fields: SMTP server, email, or password"
+            )
+        
+        # Create a temporary email service with the provided config
+        temp_service = EmailService(config)
+        
+        # Test the actual SMTP connection
+        if temp_service.test_connection():
+            return EmailTestResponse(
+                message="SMTP connection test successful! Configuration is valid.",
+                success=True
+            )
+        else:
+            return EmailTestResponse(
+                message="SMTP connection test failed",
+                success=False,
+                error="Could not connect to SMTP server with provided credentials"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error testing email config: {str(e)}")
+        return EmailTestResponse(
+            message="Configuration test failed",
+            success=False,
+            error=str(e)
+        )
 
 @router.post("/upload-data", response_model=FileUploadResponse)
 async def upload_data(file: UploadFile = File(...)):
@@ -122,12 +218,14 @@ async def send_emails(
     Optionally attach a PDF file to each email.
     """
     try:
-        # Validate email settings
-        if not settings.SENDER_EMAIL or not settings.SENDER_PASSWORD:
+        # Check if email configuration is set
+        global email_config_store
+        if email_config_store is None:
             raise HTTPException(
-                status_code=500,
-                detail="Email configuration not set. Please set SENDER_EMAIL and SENDER_PASSWORD in .env file."
+                status_code=400,
+                detail="Email configuration not set. Please configure your email settings first."
             )
+        
         # Parse the data string back to list of dictionaries
         contact_data = json.loads(data)
         if not contact_data:
@@ -147,8 +245,11 @@ async def send_emails(
         if attachment is not None:
             attachment_bytes = await attachment.read()
             attachment_filename = attachment.filename
+        # Create email service with user-provided config
+        user_email_service = EmailService(email_config_store)
+        
         # Send emails (pass attachment info)
-        result = email_service.send_batch_emails(emails, max_per_run, attachment_bytes=attachment_bytes, attachment_filename=attachment_filename)
+        result = user_email_service.send_batch_emails(emails, max_per_run, attachment_bytes=attachment_bytes, attachment_filename=attachment_filename)
         return result
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid data format")
@@ -159,4 +260,10 @@ async def send_emails(
 @router.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "message": "SmartMail API is running"} 
+    global email_config_store
+    return {
+        "status": "ok", 
+        "message": "SmartMail API is running",
+        "email_configured": email_config_store is not None,
+        "email_provider": email_config_store.smtp_server if email_config_store else None
+    } 
