@@ -31,15 +31,34 @@ function App() {
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [emailConfigStatus, setEmailConfigStatus] = useState(null);
   const [emailConfig, setEmailConfig] = useState(null);
+  const [userId, setUserId] = useState('');
+
+  // Generate or retrieve user ID on component mount
+  useEffect(() => {
+    // Try to get existing user ID from sessionStorage
+    let existingUserId = sessionStorage.getItem('smartmail_user_id');
+    if (!existingUserId) {
+      // Generate new user ID if none exists
+      existingUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      sessionStorage.setItem('smartmail_user_id', existingUserId);
+    }
+    setUserId(existingUserId);
+  }, []);
 
   // Check email configuration status on component mount
   useEffect(() => {
-    checkEmailConfig();
-  }, []);
+    if (userId) {
+      checkEmailConfig();
+    }
+  }, [userId]);
 
   const checkEmailConfig = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/email-config`);
+      const response = await fetch(`${API_URL}/api/v1/email-config`, {
+        headers: {
+          'X-User-ID': userId
+        }
+      });
       const data = await response.json();
       setEmailConfigStatus(data.success);
       // Store the config for display purposes
@@ -59,6 +78,9 @@ function App() {
       const response = await fetch(`${API_URL}/api/v1/upload-data`, {
         method: 'POST',
         body: formData,
+        headers: {
+          'X-User-ID': userId
+        }
       });
 
       if (!response.ok) {
@@ -156,6 +178,9 @@ function App() {
           }
           return formData;
         })(),
+        headers: {
+          'X-User-ID': userId
+        }
       });
 
       if (!response.ok) {
@@ -248,6 +273,7 @@ function App() {
         isOpen={showEmailConfig}
         onClose={() => setShowEmailConfig(false)}
         onConfigSaved={handleConfigSaved}
+        userId={userId}
       />
       <h2>SmartMail</h2>
       

@@ -83,7 +83,7 @@ const stepNumberStyle = {
   marginRight: 12,
 };
 
-const EmailConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
+const EmailConfigModal = ({ isOpen, onClose, onConfigSaved, userId }) => {
   const [emailAddress, setEmailAddress] = useState('');
   const [appPassword, setAppPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -99,7 +99,11 @@ const EmailConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
 
   const loadCurrentConfig = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/email-config`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/email-config`, {
+        headers: {
+          'X-User-ID': userId
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.config) {
@@ -211,6 +215,7 @@ const EmailConfigModal = ({ isOpen, onClose, onConfigSaved }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-User-ID': userId
         },
         body: JSON.stringify(config),
       });

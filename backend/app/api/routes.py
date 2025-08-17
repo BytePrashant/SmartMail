@@ -1,13 +1,15 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from typing import List
 import json
 import logging
+import uuid
 
 from ..services.email_service import EmailService
 from ..services.template_service import template_service
 from ..models.email import (
     ContactData,
+    EmailTemplate,
     EmailPreview,
     EmailBatchResponse,
     FileUploadResponse,
@@ -24,16 +26,26 @@ logger = logging.getLogger(__name__)
 # Create router
 router = APIRouter(prefix=settings.API_V1_STR)
 
-# Global variable to store email config (in production, use a database or secure storage)
-email_config_store = None
+# Store email configs by user session (in production, use a database)
+user_email_configs = {}
+
+def get_user_id(request: Request) -> str:
+    """Get or create a user ID from the request headers or generate new one."""
+    # Try to get user ID from headers (frontend will send this)
+    user_id = request.headers.get('X-User-ID')
+    if not user_id:
+        # Generate a new user ID if none exists
+        user_id = str(uuid.uuid4())
+    return user_id
 
 @router.post("/email-config", response_model=EmailConfigResponse)
-async def set_email_config(config: EmailConfig):
+async def set_email_config(config: EmailConfig, request: Request):
     """
-    Set email configuration for SMTP settings.
+    Set email configuration for the current user's SMTP settings.
     """
-    global email_config_store
     try:
+        user_id = get_user_id(request)
+        
         # Test the configuration before saving
         test_result = await test_email_config(config)
         if not test_result.success:
@@ -42,8 +54,9 @@ async def set_email_config(config: EmailConfig):
                 success=False
             )
         
-        # Store the configuration
-        email_config_store = config
+        # Store the configuration for this specific user
+        user_email_configs[user_id] = config
+        
         return EmailConfigResponse(
             message="Email configuration saved successfully",
             success=True,
@@ -57,21 +70,21 @@ async def set_email_config(config: EmailConfig):
         )
 
 @router.get("/email-config", response_model=EmailConfigResponse)
-async def get_email_config():
+async def get_email_config(request: Request):
     """
-    Get current email configuration.
+    Get current user's email configuration.
     """
-    global email_config_store
-    if email_config_store is None:
+    user_id = get_user_id(request)
+    if user_id not in user_email_configs:
         return EmailConfigResponse(
-            message="No email configuration found",
+            message="No email configuration found for this user",
             success=False
         )
     
     return EmailConfigResponse(
         message="Email configuration retrieved successfully",
         success=True,
-        config=email_config_store
+        config=user_email_configs[user_id]
     )
 
 @router.post("/email-config/test", response_model=EmailTestResponse)
@@ -219,11 +232,11 @@ async def send_emails(
     """
     try:
         # Check if email configuration is set
-        global email_config_store
-        if email_config_store is None:
+        user_id = get_user_id(request) # This line was not in the new_code, but should be added for consistency
+        if user_id not in user_email_configs:
             raise HTTPException(
                 status_code=400,
-                detail="Email configuration not set. Please configure your email settings first."
+                detail="Email configuration not set for this user. Please configure your email settings first."
             )
         
         # Parse the data string back to list of dictionaries
@@ -246,7 +259,7 @@ async def send_emails(
             attachment_bytes = await attachment.read()
             attachment_filename = attachment.filename
         # Create email service with user-provided config
-        user_email_service = EmailService(email_config_store)
+        user_email_service = EmailService(user_email_configs[user_id])
         
         # Send emails (pass attachment info)
         result = user_email_service.send_batch_emails(emails, max_per_run, attachment_bytes=attachment_bytes, attachment_filename=attachment_filename)
@@ -258,12 +271,12 @@ async def send_emails(
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
 @router.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """Health check endpoint."""
-    global email_config_store
+    user_id = get_user_id(request)
     return {
         "status": "ok", 
         "message": "SmartMail API is running",
-        "email_configured": email_config_store is not None,
-        "email_provider": email_config_store.smtp_server if email_config_store else None
+        "email_configured": user_id in user_email_configs,
+        "email_provider": user_email_configs[user_id].smtp_server if user_id in user_email_configs else None
     } 
