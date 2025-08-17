@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
@@ -8,6 +8,7 @@ import PreviewTable from './components/PreviewTable';
 import SendButton from './components/SendButton';
 import InstructionModal from './components/InstructionModal';
 import SendProgressModal from './components/SendProgressModal';
+import EmailConfigModal from './components/EmailConfigModal';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -27,13 +28,35 @@ function App() {
   const [progressEstimated, setProgressEstimated] = useState(0);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isError: false });
+  const [showEmailConfig, setShowEmailConfig] = useState(false);
+  const [emailConfigStatus, setEmailConfigStatus] = useState(null);
+  const [emailConfig, setEmailConfig] = useState(null);
+
+  // Check email configuration status on component mount
+  useEffect(() => {
+    checkEmailConfig();
+  }, []);
+
+  const checkEmailConfig = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/email-config`);
+      const data = await response.json();
+      setEmailConfigStatus(data.success);
+      // Store the config for display purposes
+      if (data.success && data.config) {
+        setEmailConfig(data.config);
+      }
+    } catch (error) {
+      setEmailConfigStatus(false);
+    }
+  };
 
   const handleFileSelect = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API_URL}/upload-data`, {
+      const response = await fetch(`${API_URL}/api/v1/upload-data`, {
         method: 'POST',
         body: formData,
       });
@@ -91,6 +114,17 @@ function App() {
   };
 
   const handleSendEmails = async () => {
+    // Check if email configuration is set
+    if (!emailConfigStatus) {
+      setMessageModalContent({
+        title: 'Email Configuration Required',
+        message: 'Please configure your email settings before sending emails.',
+        isError: true,
+      });
+      setShowMessageModal(true);
+      return;
+    }
+
     setShowProgress(true);
     setProgressCurrent(0);
     setProgressDone(false);
@@ -110,7 +144,7 @@ function App() {
     }, DELAY_PER_EMAIL * 1000);
 
     try {
-      const response = await fetch(`${API_URL}/send-emails`, {
+      const response = await fetch(`${API_URL}/api/v1/send-emails`, {
         method: 'POST',
         body: (() => {
           const formData = new FormData();
@@ -158,6 +192,18 @@ function App() {
     setStep(1);
   };
 
+  const handleConfigSaved = () => {
+    setEmailConfigStatus(true);
+    // Refresh the email configuration
+    checkEmailConfig();
+    setMessageModalContent({
+      title: 'Configuration Saved',
+      message: 'Email configuration saved successfully!',
+      isError: false,
+    });
+    setShowMessageModal(true);
+  };
+
   return (
     <div className="app-container">
       <InstructionModal isOpen={showModal} onClose={() => setShowModal(false)} />
@@ -198,7 +244,86 @@ function App() {
         isError={messageModalContent.isError}
         onClose={() => setShowMessageModal(false)}
       />
+      <EmailConfigModal
+        isOpen={showEmailConfig}
+        onClose={() => setShowEmailConfig(false)}
+        onConfigSaved={handleConfigSaved}
+      />
       <h2>SmartMail</h2>
+      
+      {/* Email Configuration Status */}
+      <div style={{ marginBottom: 16 }}>
+        {emailConfigStatus ? (
+          <div style={{ 
+            color: '#059669', 
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: '#f0fdf4',
+            padding: '12px 16px',
+            borderRadius: 8,
+            border: '1px solid #bbf7d0'
+          }}>
+            <div>
+              ✅ Ready to send emails!
+              {emailConfig && (
+                <div style={{ fontSize: 14, color: '#047857', marginTop: 4 }}>
+                  Using: {emailConfig.sender_email}
+                </div>
+              )}
+            </div>
+            <button
+              style={{
+                padding: '6px 12px',
+                background: '#059669',
+                color: 'white',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: 14,
+              }}
+              onClick={() => setShowEmailConfig(true)}
+            >
+              Change Email
+            </button>
+          </div>
+        ) : (
+          <div style={{ 
+            color: '#dc2626', 
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: '#fef2f2',
+            padding: '12px 16px',
+            borderRadius: 8,
+            border: '1px solid #fecaca'
+          }}>
+            <div>
+              📧 Setup Required
+              <div style={{ fontSize: 14, color: '#991b1b', marginTop: 4 }}>
+                Enter your Gmail address to get started
+              </div>
+            </div>
+            <button
+              style={{
+                padding: '6px 12px',
+                background: '#dc2626',
+                color: 'white',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: 14,
+              }}
+              onClick={() => setShowEmailConfig(true)}
+            >
+              Setup Email
+            </button>
+          </div>
+        )}
+      </div>
+
       {step === 1 && (
         <>
           <FileUpload onFileSelect={handleFileSelect} />
@@ -287,7 +412,7 @@ function App() {
             </button>
             <SendButton
               onClick={handleSendEmails}
-              disabled={!data.length}
+              disabled={!data.length || !emailConfigStatus}
             />
           </div>
         </>
