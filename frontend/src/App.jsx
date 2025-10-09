@@ -1,6 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useState, useEffect } from 'react'
 import './App.css'
 import FileUpload from './components/FileUpload';
 import TemplateForm from './components/TemplateForm';
@@ -10,7 +8,9 @@ import InstructionModal from './components/InstructionModal';
 import SendProgressModal from './components/SendProgressModal';
 import EmailConfigModal from './components/EmailConfigModal';
 
-const API_URL = import.meta.env.VITE_API_URL;
+import apiFetch from './api';
+import useUserId from './hooks/useUserId';
+import useSendProgress from './hooks/useSendProgress';
 
 function App() {
   const [step, setStep] = useState(1);
@@ -21,51 +21,35 @@ function App() {
   const [showModal, setShowModal] = useState(true);
   const [previewIdx, setPreviewIdx] = useState(0);
   const [randomPreviewRows, setRandomPreviewRows] = useState([]);
-  const [showProgress, setShowProgress] = useState(false);
-  const [progressCurrent, setProgressCurrent] = useState(0);
-  const [progressDone, setProgressDone] = useState(false);
-  const [progressTotal, setProgressTotal] = useState(0);
-  const [progressEstimated, setProgressEstimated] = useState(0);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isError: false });
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [emailConfigStatus, setEmailConfigStatus] = useState(null);
   const [emailConfig, setEmailConfig] = useState(null);
-  const [userId, setUserId] = useState('');
 
-  // Generate or retrieve user ID on component mount
-  useEffect(() => {
-    // Try to get existing user ID from sessionStorage
-    let existingUserId = sessionStorage.getItem('smartmail_user_id');
-    if (!existingUserId) {
-      // Generate new user ID if none exists
-      existingUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      sessionStorage.setItem('smartmail_user_id', existingUserId);
-    }
-    setUserId(existingUserId);
-  }, []);
+  const {
+    showProgress,
+    progressCurrent,
+    progressDone,
+    progressTotal,
+    progressEstimated,
+    startSend,
+    reset: resetProgress,
+  } = useSendProgress();
 
-  // Check email configuration status on component mount
+  const userId = useUserId();
+
   useEffect(() => {
-    if (userId) {
-      checkEmailConfig();
-    }
+    if (userId) checkEmailConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const checkEmailConfig = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/email-config`, {
-        headers: {
-          'X-User-ID': userId
-        }
-      });
-      const data = await response.json();
+      const data = await apiFetch('/api/v1/email-config', { userId });
       setEmailConfigStatus(data.success);
-      // Store the config for display purposes
-      if (data.success && data.config) {
-        setEmailConfig(data.config);
-      }
-    } catch (error) {
+      if (data.success && data.config) setEmailConfig(data.config);
+    } catch {
       setEmailConfigStatus(false);
     }
   };
@@ -75,42 +59,17 @@ function App() {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/upload-data`, {
+      const result = await apiFetch('/api/v1/upload-data', {
         method: 'POST',
         body: formData,
-        headers: {
-          'X-User-ID': userId
-        }
+        userId,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setMessageModalContent({
-          title: 'Upload Failed',
-          message: errorData.detail || 'File upload failed',
-          isError: true,
-        });
-        setShowMessageModal(true);
-        throw new Error(errorData.detail || 'File upload failed');
-      }
-
-      const result = await response.json();
-      setData(result.data); // Update your data state with the contacts from backend
-      setMessageModalContent({
-        title: 'Upload Successful',
-        message: result.message || 'File uploaded successfully!',
-        isError: false,
-      });
+      setData(result.data);
+      setMessageModalContent({ title: 'Upload Successful', message: result.message || 'File uploaded successfully!', isError: false });
       setShowMessageModal(true);
     } catch (error) {
-      if (!showMessageModal) {
-        setMessageModalContent({
-          title: 'Upload Failed',
-          message: error.message,
-          isError: true,
-        });
-        setShowMessageModal(true);
-      }
+      setMessageModalContent({ title: 'Upload Failed', message: error.message, isError: true });
+      setShowMessageModal(true);
     }
   };
 
@@ -136,96 +95,31 @@ function App() {
   };
 
   const handleSendEmails = async () => {
-    // Check if email configuration is set
     if (!emailConfigStatus) {
-      setMessageModalContent({
-        title: 'Email Configuration Required',
-        message: 'Please configure your email settings before sending emails.',
-        isError: true,
-      });
+      setMessageModalContent({ title: 'Email Configuration Required', message: 'Please configure your email settings before sending emails.', isError: true });
       setShowMessageModal(true);
       return;
     }
 
-    setShowProgress(true);
-    setProgressCurrent(0);
-    setProgressDone(false);
-    setProgressTotal(data.length);
-    const DELAY_PER_EMAIL = 10; // seconds (updated)
-    setProgressEstimated(Math.round(data.length * DELAY_PER_EMAIL));
-
-    // Simulate progress
-    let sent = 0;
-    const interval = setInterval(() => {
-      sent++;
-      setProgressCurrent(c => Math.min(c + 1, data.length));
-      setProgressEstimated(e => Math.max(e - DELAY_PER_EMAIL, 0));
-      if (sent >= data.length) {
-        clearInterval(interval);
-      }
-    }, DELAY_PER_EMAIL * 1000);
-
     try {
-      const response = await fetch(`${API_URL}/api/v1/send-emails`, {
-        method: 'POST',
-        body: (() => {
-          const formData = new FormData();
-          formData.append('subject', subject);
-          formData.append('body', body);
-          formData.append('data', JSON.stringify(data));
-          if (pdfFile) {
-            formData.append('attachment', pdfFile);
-          }
-          return formData;
-        })(),
-        headers: {
-          'X-User-ID': userId
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setProgressDone(true);
-        setMessageModalContent({
-          title: 'Send Failed',
-          message: errorData.detail || 'Failed to send emails',
-          isError: true,
-        });
+      await startSend({ subject, body, data, pdfFile, userId, onError: err => {
+        setMessageModalContent({ title: 'Send Failed', message: err.message, isError: true });
         setShowMessageModal(true);
-        throw new Error(errorData.detail || 'Failed to send emails');
-      }
-
-      const result = await response.json();
-      setProgressCurrent(data.length);
-      setProgressEstimated(0);
-      setProgressDone(true);
-      // Optionally, you can show a success message here or after closing the modal
-    } catch (error) {
-      setProgressDone(true);
-      setMessageModalContent({
-        title: 'Send Failed',
-        message: error.message,
-        isError: true,
-      });
-      setShowMessageModal(true);
+      }});
+    } catch {
+      // errors handled in onError
     }
   };
 
-  // Handler to return to front page after sending
   const handleReturnToFront = () => {
-    setShowProgress(false);
+    resetProgress();
     setStep(1);
   };
 
   const handleConfigSaved = () => {
     setEmailConfigStatus(true);
-    // Refresh the email configuration
     checkEmailConfig();
-    setMessageModalContent({
-      title: 'Configuration Saved',
-      message: 'Email configuration saved successfully!',
-      isError: false,
-    });
+    setMessageModalContent({ title: 'Configuration Saved', message: 'Email configuration saved successfully!', isError: false });
     setShowMessageModal(true);
   };
 
@@ -258,7 +152,7 @@ function App() {
         current={progressCurrent}
         estimatedTime={progressEstimated}
         isDone={progressDone}
-        onClose={() => setShowProgress(false)}
+        onClose={() => resetProgress()}
         onReturnToFront={handleReturnToFront}
       />
       <SendProgressModal
