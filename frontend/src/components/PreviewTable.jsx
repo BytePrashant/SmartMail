@@ -1,9 +1,5 @@
 import React from 'react';
-
-// Helper function to replace placeholders in the template
-function mergeTemplate(template, row) {
-  return template.replace(/\{(\w+)\}/g, (_, key) => row[key] || '');
-}
+import { mergeTemplate } from '../utils/template';
 
 function PreviewTable({ data, subject, body }) {
   if (!data || data.length === 0) {
